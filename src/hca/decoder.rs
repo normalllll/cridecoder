@@ -365,7 +365,9 @@ pub struct ClHca {
     pub ath_curve: [u8; HCA_SAMPLES_PER_SUBFRAME],
     pub cipher_table: [u8; 256],
     pub random: u32,
-    pub channel: [StChannel; HCA_MAX_CHANNELS],
+    /// Heap-allocated: the channel state is ~170 KiB, and keeping it inline
+    /// put that much on the stack of every caller that builds a decoder.
+    pub channel: Box<[StChannel; HCA_MAX_CHANNELS]>,
 }
 
 impl Default for ClHca {
@@ -415,7 +417,11 @@ impl ClHca {
             ath_curve: [0; HCA_SAMPLES_PER_SUBFRAME],
             cipher_table: [0; 256],
             random: HCA_DEFAULT_RANDOM,
-            channel: std::array::from_fn(|_| StChannel::default()),
+            // Built as a Vec so the array never exists on the stack.
+            channel: vec![StChannel::default(); HCA_MAX_CHANNELS]
+                .into_boxed_slice()
+                .try_into()
+                .unwrap_or_else(|_| unreachable!("vec has HCA_MAX_CHANNELS elements")),
         }
     }
 
